@@ -1,101 +1,298 @@
-import Image from "next/image";
+"use client";
+import * as React from "react";
+import { useState, useCallback, useRef } from "react";
+import { createRoot } from "react-dom/client";
+import Map, { Marker, NavigationControl } from "react-map-gl"; // Import NavigationControl
+import DrawControl from "@/app/components/DrawControl";
+import ControlPanel from "@/app/components/ControlPanel";
+import * as turf from "@turf/turf";
+import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
+import "mapbox-gl/dist/mapbox-gl.css";
+import { useAuth, RedirectToSignIn } from "@clerk/nextjs";
+import { Tooltip } from "@material-tailwind/react";
 
-export default function Home() {
+
+const TOKEN = process.env.NEXT_PUBLIC_mapboxgl_accessToken;
+
+export default function App() {
+  const { userId } = useAuth();
+
+  const [features, setFeatures] = useState({});
+  const [fetchedFeatures, setFetchedFetures] = useState([]);
+  const [markerPositions, setMarkerPositions] = useState([]);
+  const [hoveredFeature, setHoveredFeature] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState(null);
+
+ 
+
+  const mapRef = useRef(null);
+
+  React.useEffect(() => {
+    if (userId) {
+      async function fetchData(userId) {
+        try {
+          const response = await fetch(`/api/upload?userId=${userId}`, {
+            method: "GET",
+          });
+          const data = await response.json();
+          if (data && data.savedFeatures) {
+            setFetchedFetures(data.savedFeatures)
+          }
+          
+        } catch (error) {
+          console.log(error);
+        }
+      }
+      fetchData(userId);
+    }
+    
+  }, [userId]);
+
+  const onUpdate = useCallback((e) => {
+    setFeatures((currFeatures) => {
+      const newFeatures = { ...currFeatures };
+      for (const f of e.features) {
+        newFeatures[f.id] = f;
+
+        if (f.geometry.type === "Point") {
+          setMarkerPositions((prev) => {
+            const existingMarker = prev.find((m) => m.id === f.id);
+            if (!existingMarker) {
+              return [...prev, { id: f.id, coordinates: f.geometry.coordinates }];
+            }
+            return prev.map((m) =>
+              m.id === f.id ? { id: f.id, coordinates: f.geometry.coordinates } : m
+            );
+          });
+        }
+      }
+
+      return newFeatures;
+    });
+  }, []);
+
+  const onDelete = useCallback((e) => {
+    setFeatures((currFeatures) => {
+      const newFeatures = { ...currFeatures };
+      for (const f of e.features) {
+        delete newFeatures[f.id];
+      }
+      return newFeatures;
+    });
+
+    setMarkerPositions((prev) =>
+      prev.filter((marker) => !e.features.some((f) => f.id === marker.id))
+    );
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!mapRef.current) return;
+
+    const featuresAtCursor = mapRef.current.queryRenderedFeatures(e.point);
+
+    if (featuresAtCursor.length > 0) {
+      const feature = featuresAtCursor.find((f) =>
+        ["Point", "Polygon", "LineString"].includes(f.geometry.type)
+      );
+
+      if (feature) {
+        const geometry = feature.geometry;
+        let additionalInfo = null;
+
+        if (geometry.type === "Polygon") {
+          const polygon = turf.polygon(geometry.coordinates);
+          const area = turf.area(polygon);
+          additionalInfo = { area: area.toFixed(2) };
+        } else if (geometry.type === "LineString") {
+          const line = turf.lineString(geometry.coordinates);
+          const length = turf.length(line, { units: "kilometers" });
+          additionalInfo = { length: length.toFixed(2) };
+        }
+        setHoveredFeature({
+          type: geometry.type,
+          coordinates: geometry.coordinates,
+          id: feature.id,
+          ...additionalInfo,
+        });
+        let tooltipTop = e.point.y + 15;
+
+        const featureBounds = mapRef.current.getMap().getBounds(feature.id);
+        if (featureBounds) {
+          const featurePixelTop = mapRef.current.project([
+            featureBounds.getNorthEast().lng,
+            featureBounds.getNorthEast().lat,
+          ]).y;
+          const featurePixelBottom = mapRef.current.project([
+            featureBounds.getSouthWest().lng,
+            featureBounds.getSouthWest().lat,
+          ]).y;
+
+          if (e.point.y >= featurePixelTop && e.point.y <= featurePixelBottom) {
+            tooltipTop = featurePixelBottom + 15;
+          }
+        }
+
+        setTooltipPosition({
+          left: e.point.x + 10,
+          top: tooltipTop,
+        });
+      } else {
+        setHoveredFeature(null);
+        setTooltipPosition(null);
+      }
+    } else {
+      setHoveredFeature(null);
+      setTooltipPosition(null);
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredFeature(null);
+    setTooltipPosition(null);
+  }, []);
+  if (!userId) {
+    return <RedirectToSignIn />;
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="p-10">
+      <Map
+        initialViewState={{
+          longitude: -91.874,
+          latitude: 42.76,
+          zoom: 2,
+        }}
+        style={{ width: "100%", height: "70vh" }}
+        mapStyle="mapbox://styles/mapbox/streets-v9"
+        mapboxAccessToken={TOKEN}
+        ref={mapRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        projection="globe"
+      >
+        <NavigationControl position="top-right" />
+        {markerPositions.map((marker) => (
+          <Marker
+            key={marker.id}
+            longitude={marker.coordinates[0]}
+            latitude={marker.coordinates[1]}
+            anchor="bottom"
+          >
+            <div
+              style={{
+                width: "20px",
+                height: "20px",
+                backgroundColor: "red",
+                borderRadius: "50% 50% 0 50%",
+                cursor: "pointer",
+                transform: "rotate(45deg)",
+                border: "1px solid black",
+                position: "relative",
+              }}
+              title={`Marker ID: ${marker.id} at Lat:${marker.coordinates[1]} Lng:${marker.coordinates[0]}`}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: "5px",
+                  left: "7px",
+                  backgroundColor: "black",
+                  width: "4px",
+                  height: "4px",
+                  borderRadius: "50%",
+                  transform: "rotate(-45deg)",
+                }}
+              ></div>
+            </div>
+          </Marker>
+        ))}
+        <DrawControl
+          position="top-left"
+          displayControlsDefault={false}
+          controls={{
+            point: true,
+            polygon: true,
+            trash: true,
+          }}
+          defaultMode="draw_polygon"
+          onCreate={onUpdate}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+        />
+
+          {fetchedFeatures?.map((feature, idx) => (
+            feature.geometry.type === "Point" && (
+            
+                <Marker
+            longitude={feature.geometry.coordinates[0]}
+            latitude={feature.geometry.coordinates[1]}
+            anchor="bottom"
+           
+            key={idx}
+            >
+             <Tooltip
+        className="text-white"
+        content={
+          feature.properties?.name && feature.properties?.description
+            ? `${feature.properties.name}: ${feature.properties.description}`
+            : feature.properties?.name || "No name available"
+        }
+      >
+             <img src="https://www.freeiconspng.com/uploads/pin-png-28.png" width="50" alt=" Pin" />
+             </Tooltip>
+             
+            </Marker>
+             
+            )
+          ))}
+
+      </Map>
+      {hoveredFeature && tooltipPosition && (
+        <div
+          className="tooltip"
+          style={{
+            position: "absolute",
+            left: `${tooltipPosition.left}px`,
+            top: `${tooltipPosition.top}px`,
+            padding: "10px",
+            backgroundColor: "#333",
+            color: "#fff",
+            borderRadius: "8px",
+            pointerEvents: "none",
+            zIndex: 10,
+            fontSize: "14px",
+            width: "200px",
+            boxShadow: "0 0 10px rgba(0, 0, 0, 0.3)",
+          }}
+        >
+          <h4>Hovered Feature</h4>
+          <p>
+            <strong>Type:</strong> {hoveredFeature.type}
+          </p>
+          {hoveredFeature.type === "Point" && (
+            <p>
+              <strong>Coordinates:</strong> Lat: {hoveredFeature.coordinates[1]},
+              Lng: {hoveredFeature.coordinates[0]}
+            </p>
+          )}
+          {hoveredFeature.type === "Polygon" && (
+            <p>
+              <strong>Area:</strong> {hoveredFeature.area} m²
+            </p>
+          )}
+          {hoveredFeature.type === "LineString" && (
+            <p>
+              <strong>Length:</strong> {hoveredFeature.length} km
+            </p>
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
+      <ControlPanel polygons={Object.values(features)} markers={markerPositions} />
     </div>
   );
+}
+
+export function renderToDom(container) {
+  createRoot(container).render(<App />);
 }
