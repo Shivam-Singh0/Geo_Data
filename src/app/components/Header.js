@@ -43,10 +43,11 @@ export function Header() {
                 <div className="flex items-center justify-between text-white">
                     <Typography
                         as="a"
-                        href="#"
                         className="mr-4 cursor-pointer py-1.5 font-medium"
                     >
-                        Geo Data
+                        <Link href="/" className="flex items-center">
+                    Upload
+                </Link>
                     </Typography>
                     <div className="flex items-center gap-4">
                         <div className="mr-4 hidden lg:block">{navList}</div>
