@@ -2,7 +2,7 @@
 import * as React from "react";
 import { useState, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import Map, { Marker, NavigationControl } from "react-map-gl"; // Import NavigationControl
+import Map, { Marker, NavigationControl, Layer, Source,  } from "react-map-gl";
 import DrawControl from "@/app/components/DrawControl";
 import ControlPanel from "@/app/components/ControlPanel";
 import * as turf from "@turf/turf";
@@ -15,6 +15,8 @@ import { Tooltip } from "@material-tailwind/react";
 const TOKEN = process.env.NEXT_PUBLIC_mapboxgl_accessToken;
 
 export default function App() {
+ 
+
   const { userId } = useAuth();
 
   const [features, setFeatures] = useState({});
@@ -22,8 +24,24 @@ export default function App() {
   const [markerPositions, setMarkerPositions] = useState([]);
   const [hoveredFeature, setHoveredFeature] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState(null);
+  const geojson = {
+    "type": "FeatureCollection",
+    "features": [
+    
+      ...fetchedFeatures
+  ],
+    
+  }
 
- 
+  const layerStyle = {
+    id: "polygon",
+    type: "fill", // Use 'fill' for polygons
+    paint: {
+      "fill-color": "#007cbf",
+      "fill-opacity": 0.8, // Optional opacity
+      "fill-outline-color": "#000", // Optional outline
+    },
+  };
 
   const mapRef = useRef(null);
 
@@ -36,16 +54,14 @@ export default function App() {
           });
           const data = await response.json();
           if (data && data.savedFeatures) {
-            setFetchedFetures(data.savedFeatures)
+            setFetchedFetures(data.savedFeatures);
           }
-          
         } catch (error) {
           console.log(error);
         }
       }
       fetchData(userId);
     }
-    
   }, [userId]);
 
   const onUpdate = useCallback((e) => {
@@ -150,6 +166,7 @@ export default function App() {
     setHoveredFeature(null);
     setTooltipPosition(null);
   }, []);
+
   if (!userId) {
     return <RedirectToSignIn />;
   }
@@ -218,35 +235,36 @@ export default function App() {
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
-
         />
 
-          {fetchedFeatures?.map((feature, idx) => (
-            feature.geometry.type === "Point" && (
-            
-                <Marker
-            longitude={feature.geometry.coordinates[0]}
-            latitude={feature.geometry.coordinates[1]}
-            anchor="bottom"
-           
-            key={idx}
+        {fetchedFeatures?.map((feature, idx) => (
+          feature.geometry.type === "Point" && (
+            <Marker
+              longitude={feature.geometry.coordinates[0]}
+              latitude={feature.geometry.coordinates[1]}
+              anchor="bottom"
+              key={feature.id || idx} // Use feature.id if available or index if not
             >
-             <Tooltip
-        className="text-white"
-        content={
-          feature.properties?.name && feature.properties?.description
-            ? `${feature.properties.name}: ${feature.properties.description}`
-            : feature.properties?.name || "No name available"
-        }
-      >
-             <img src="https://www.freeiconspng.com/uploads/pin-png-28.png" width="50" alt=" Pin" />
-             </Tooltip>
-             
+              <Tooltip
+                className="text-white"
+                content={
+                  feature.properties?.name && feature.properties?.description
+                    ? `${feature.properties.name}: ${feature.properties.description}`
+                    : feature.properties?.name || "No name available"
+                }
+              >
+                <img
+                  src="https://www.freeiconspng.com/uploads/pin-png-28.png"
+                  width="50"
+                  alt=" Pin"
+                />
+              </Tooltip>
             </Marker>
-             
-            )
-          ))}
-
+          )
+        ))}
+  <Source type="geojson" data={geojson}>
+        <Layer {...layerStyle} />
+      </Source>
       </Map>
       {hoveredFeature && tooltipPosition && (
         <div
@@ -278,7 +296,7 @@ export default function App() {
           )}
           {hoveredFeature.type === "Polygon" && (
             <p>
-              <strong>Area:</strong> {hoveredFeature.area} m²
+              <strong>Area:</strong> {hoveredFeature.area / 1000000} KM²
             </p>
           )}
           {hoveredFeature.type === "LineString" && (
