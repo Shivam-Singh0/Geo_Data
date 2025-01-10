@@ -28,7 +28,41 @@ export default function App() {
     "type": "FeatureCollection",
     "features": [
     
-      ...fetchedFeatures
+      ...fetchedFeatures, {
+        
+          "type": "Feature",
+          "properties": {
+            "name": "Delhi"
+          },
+          "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+              [
+                [
+                  [77.068899, 28.661897],
+                  [77.112184, 28.654831],
+                  [77.185843, 28.671632],
+                  [77.241066, 28.745399],
+                  [77.191925, 28.828181],
+                  [77.092635, 28.867926],
+                  [76.986056, 28.80859],
+                  [76.977082, 28.720449],
+                  [77.005786, 28.65388],
+                  [77.068899, 28.661897]
+                ]
+              ],
+              [
+                [
+                  [77.240837, 28.534845],
+                  [77.293305, 28.529138],
+                  [77.324726, 28.552294],
+                  [77.279283, 28.601748],
+                  [77.240837, 28.534845]
+                ]
+              ]
+            ]
+          }
+        }
   ],
     
   }
@@ -108,7 +142,7 @@ export default function App() {
 
     if (featuresAtCursor.length > 0) {
       const feature = featuresAtCursor.find((f) =>
-        ["Point", "Polygon", "LineString"].includes(f.geometry.type)
+        ["Point", "Polygon", "LineString", "MultiPolygon"].includes(f.geometry.type)
       );
 
       if (feature) {
@@ -124,6 +158,10 @@ export default function App() {
           const line = turf.lineString(geometry.coordinates);
           const length = turf.length(line, { units: "kilometers" });
           additionalInfo = { length: length.toFixed(2) };
+        }else if (geometry.type === "MultiPolygon"){
+            const multipolygon = turf.multiPolygon(geometry.coordinates);
+            const area = turf.area(multipolygon);
+            additionalInfo = { area: area.toFixed(2) };
         }
         setHoveredFeature({
           type: geometry.type,
@@ -310,6 +348,16 @@ export default function App() {
             <>
             <p>
               <strong>Length:</strong> {hoveredFeature.length} km
+            </p>
+            <p>
+              <strong>name:</strong> {hoveredFeature.name} 
+            </p>
+            </>
+          )}
+          {hoveredFeature.type === "MultiPolygon" && (
+            <>
+            <p>
+              <strong>Length:</strong> {hoveredFeature.area / 1000} KM²
             </p>
             <p>
               <strong>name:</strong> {hoveredFeature.name} 
