@@ -189,7 +189,7 @@ export default function App() {
         }
 
         setTooltipPosition({
-          left: e.point.x + 10,
+          left: e.point.x + 60,
           top: tooltipTop,
         });
       } else {
