@@ -113,6 +113,7 @@ export default function App() {
 
       if (feature) {
         const geometry = feature.geometry;
+        const properties = feature.properties;
         let additionalInfo = null;
 
         if (geometry.type === "Polygon") {
@@ -128,6 +129,7 @@ export default function App() {
           type: geometry.type,
           coordinates: geometry.coordinates,
           id: feature.id,
+          name : properties?.name || "No Name",
           ...additionalInfo,
         });
         let tooltipTop = e.point.y + 15;
@@ -295,14 +297,24 @@ export default function App() {
             </p>
           )}
           {hoveredFeature.type === "Polygon" && (
+          <>
             <p>
               <strong>Area:</strong> {hoveredFeature.area / 1000000} KM²
             </p>
+             <p>
+             <strong>name:</strong> {hoveredFeature.name} 
+           </p>
+          </>
           )}
           {hoveredFeature.type === "LineString" && (
+            <>
             <p>
               <strong>Length:</strong> {hoveredFeature.length} km
             </p>
+            <p>
+              <strong>name:</strong> {hoveredFeature.name} 
+            </p>
+            </>
           )}
         </div>
       )}
