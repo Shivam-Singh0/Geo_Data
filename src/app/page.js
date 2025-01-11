@@ -24,45 +24,25 @@ export default function App() {
   const [markerPositions, setMarkerPositions] = useState([]);
   const [hoveredFeature, setHoveredFeature] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState(null);
+
+
+  React.useEffect(() => {
+    if (fetchedFeatures) {
+      for (let feature of fetchedFeatures) {
+        if (feature.geometry.type === "Point" ) {
+          setMarkerPositions((prev) => [...prev, {coordinates: feature.geometry.coordinates, name: feature.properties.name || "Not Named", description : feature.properties.description || ""  }])
+        }
+        
+      }
+    }
+  }, [fetchedFeatures])
+
+
   const geojson = {
     "type": "FeatureCollection",
     "features": [
     
-      ...fetchedFeatures, {
-        
-          "type": "Feature",
-          "properties": {
-            "name": "Delhi"
-          },
-          "geometry": {
-            "type": "MultiPolygon",
-            "coordinates": [
-              [
-                [
-                  [77.068899, 28.661897],
-                  [77.112184, 28.654831],
-                  [77.185843, 28.671632],
-                  [77.241066, 28.745399],
-                  [77.191925, 28.828181],
-                  [77.092635, 28.867926],
-                  [76.986056, 28.80859],
-                  [76.977082, 28.720449],
-                  [77.005786, 28.65388],
-                  [77.068899, 28.661897]
-                ]
-              ],
-              [
-                [
-                  [77.240837, 28.534845],
-                  [77.293305, 28.529138],
-                  [77.324726, 28.552294],
-                  [77.279283, 28.601748],
-                  [77.240837, 28.534845]
-                ]
-              ]
-            ]
-          }
-        }
+      ...fetchedFeatures
   ],
     
   }
@@ -163,11 +143,13 @@ export default function App() {
             const area = turf.area(multipolygon);
             additionalInfo = { area: area.toFixed(2) };
         }
+      
         setHoveredFeature({
           type: geometry.type,
           coordinates: geometry.coordinates,
           id: feature.id,
           name : properties?.name || "No Name",
+          description: properties?.description || "No desc" ,
           ...additionalInfo,
         });
         let tooltipTop = e.point.y + 15;
@@ -228,39 +210,24 @@ export default function App() {
         projection="globe"
       >
         <NavigationControl position="top-right" />
-        {markerPositions.map((marker) => (
+        {markerPositions.map((marker, idx) => (
           <Marker
-            key={marker.id}
+            key={marker.id || idx}
             longitude={marker.coordinates[0]}
             latitude={marker.coordinates[1]}
             anchor="bottom"
           >
-            <div
-              style={{
-                width: "20px",
-                height: "20px",
-                backgroundColor: "red",
-                borderRadius: "50% 50% 0 50%",
-                cursor: "pointer",
-                transform: "rotate(45deg)",
-                border: "1px solid black",
-                position: "relative",
-              }}
-              title={`Marker ID: ${marker.id} at Lat:${marker.coordinates[1]} Lng:${marker.coordinates[0]}`}
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: "5px",
-                  left: "7px",
-                  backgroundColor: "black",
-                  width: "4px",
-                  height: "4px",
-                  borderRadius: "50%",
-                  transform: "rotate(-45deg)",
-                }}
-              ></div>
-            </div>
+           <Tooltip content={`coordinates:[${marker.coordinates[0]}, ${marker.coordinates[1]}]
+           name: ${marker.name}`}
+            className="whitespace-pre-line"
+           >
+
+           <img
+                  src="https://www.freeiconspng.com/uploads/pin-png-28.png"
+                  width="20"
+                  alt=" Pin"
+                />
+           </Tooltip>
           </Marker>
         ))}
         <DrawControl
@@ -270,38 +237,13 @@ export default function App() {
             point: true,
             polygon: true,
             trash: true,
+            line_string: true
           }}
           defaultMode="draw_polygon"
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
         />
-
-        {fetchedFeatures?.map((feature, idx) => (
-          feature.geometry.type === "Point" && (
-            <Marker
-              longitude={feature.geometry.coordinates[0]}
-              latitude={feature.geometry.coordinates[1]}
-              anchor="bottom"
-              key={feature.id || idx} // Use feature.id if available or index if not
-            >
-              <Tooltip
-                className="text-white"
-                content={
-                  feature.properties?.name && feature.properties?.description
-                    ? `${feature.properties.name}: ${feature.properties.description}`
-                    : feature.properties?.name || "No name available"
-                }
-              >
-                <img
-                  src="https://www.freeiconspng.com/uploads/pin-png-28.png"
-                  width="50"
-                  alt=" Pin"
-                />
-              </Tooltip>
-            </Marker>
-          )
-        ))}
   <Source type="geojson" data={geojson}>
         <Layer {...layerStyle} />
       </Source>
@@ -329,10 +271,18 @@ export default function App() {
             <strong>Type:</strong> {hoveredFeature.type}
           </p>
           {hoveredFeature.type === "Point" && (
+           <>
             <p>
               <strong>Coordinates:</strong> Lat: {hoveredFeature.coordinates[1]},
               Lng: {hoveredFeature.coordinates[0]}
             </p>
+             <p>
+             <strong>name:</strong> {hoveredFeature.name} 
+           </p>
+           <p>
+             <strong>desc:</strong> {hoveredFeature.description} 
+           </p>
+           </>
           )}
           {hoveredFeature.type === "Polygon" && (
           <>
@@ -341,6 +291,9 @@ export default function App() {
             </p>
              <p>
              <strong>name:</strong> {hoveredFeature.name} 
+           </p>
+           <p>
+             <strong>desc:</strong> {hoveredFeature.description} 
            </p>
           </>
           )}
@@ -352,6 +305,9 @@ export default function App() {
             <p>
               <strong>name:</strong> {hoveredFeature.name} 
             </p>
+            <p>
+             <strong>desc:</strong> {hoveredFeature.description} 
+           </p>
             </>
           )}
           {hoveredFeature.type === "MultiPolygon" && (
@@ -362,6 +318,9 @@ export default function App() {
             <p>
               <strong>name:</strong> {hoveredFeature.name} 
             </p>
+            <p>
+             <strong>desc:</strong> {hoveredFeature.description} 
+           </p>
             </>
           )}
         </div>
