@@ -89,3 +89,21 @@ export async function GET(req) {
     return NextResponse.json(error, {status: 400})
   }
 }
+
+// export async function PUT(req) {
+//   await dbConnect();
+//   const {features} = req.body;
+//   try {
+//     const savedFeature = await SavedFeatures.findOne({userId});
+//     if (savedFeature) {
+//         savedFeature.savedFeature.push(...features);
+//         await savedFeature.save();
+//     }else {
+//        savedFeature = await SavedFeatures.create({userId, savedFeatures: features})
+//     }
+//    return NextResponse.json(savedFeature, {status: 200})
+//   } catch (error) {
+//     console.log(error)
+//     return NextResponse.json(error, {status: 400})
+//   }
+// }

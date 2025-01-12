@@ -9,7 +9,8 @@ import * as turf from "@turf/turf";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useAuth, RedirectToSignIn } from "@clerk/nextjs";
-import { Tooltip } from "@material-tailwind/react";
+import { Button, Tooltip } from "@material-tailwind/react";
+import { fetchData, saveFeatures } from "./actions/actions";
 
 
 const TOKEN = process.env.NEXT_PUBLIC_mapboxgl_accessToken;
@@ -24,13 +25,14 @@ export default function App() {
   const [markerPositions, setMarkerPositions] = useState([]);
   const [hoveredFeature, setHoveredFeature] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState(null);
+  const [saving, setSaving] = useState(false);
 
 
   React.useEffect(() => {
-    if (fetchedFeatures) {
+    if (fetchedFeatures.length) {
       for (let feature of fetchedFeatures) {
         if (feature.geometry.type === "Point" ) {
-          setMarkerPositions((prev) => [...prev, {coordinates: feature.geometry.coordinates, name: feature.properties.name || "Not Named", description : feature.properties.description || ""  }])
+          setMarkerPositions((prev) => [...prev, {coordinates: feature.geometry.coordinates, name: feature.properties?.name || "Not Named", description : feature.properties?.description || ""  }])
         }
         
       }
@@ -47,35 +49,40 @@ export default function App() {
     
   }
 
-  const layerStyle = {
-    id: "polygon",
-    type: "fill", // Use 'fill' for polygons
-    paint: {
-      "fill-color": "#007cbf",
-      "fill-opacity": 0.8, // Optional opacity
-      "fill-outline-color": "#000", // Optional outline
+  const layerStyles = {
+    polygon: {
+      id: "polygon",
+      type: "fill",
+      paint: {
+        "fill-color": "#007cbf",
+        "fill-opacity": 0.5,
+        "fill-outline-color": "#000",
+      },
+    },
+    line: {
+      id: "line",
+      type: "line",
+      paint: {
+        "line-color": "#ff0000",
+        "line-width": 2,
+      },
+    },
+    point: {
+      id: "point",
+      type: "circle",
+      paint: {
+        "circle-radius": 6,
+        "circle-color": "#ff0000",
+      },
     },
   };
+  
 
   const mapRef = useRef(null);
 
   React.useEffect(() => {
     if (userId) {
-      async function fetchData(userId) {
-        try {
-          const response = await fetch(`/api/upload?userId=${userId}`, {
-            method: "GET",
-          });
-          const data = await response.json();
-          if (data && data.savedFeatures) {
-            setFetchedFetures(data.savedFeatures);
-          }
-        } catch (error) {
-          console.log(error);
-        }
-      }
-      fetchData(userId);
-    }
+      fetchData(userId).then((data) => setFetchedFetures(data) ) }
   }, [userId]);
 
   const onUpdate = useCallback((e) => {
@@ -193,6 +200,13 @@ export default function App() {
     return <RedirectToSignIn />;
   }
 
+  const saveHandler = async() => {
+    setSaving(true)
+    await saveFeatures(Object.values(features), userId)
+    setSaving(false)
+    fetchData(userId).then((data) => setFetchedFetures(data) )
+  }
+
   return (
     <div className="p-10">
       <Map
@@ -239,14 +253,17 @@ export default function App() {
             trash: true,
             line_string: true
           }}
-          defaultMode="draw_polygon"
+          defaultMode="simple_select"
           onCreate={onUpdate}
           onUpdate={onUpdate}
           onDelete={onDelete}
         />
-  <Source type="geojson" data={geojson}>
-        <Layer {...layerStyle} />
-      </Source>
+        
+        <Source id="geojson-data" type="geojson" data={geojson}>
+  <Layer {...layerStyles.polygon} />
+  <Layer {...layerStyles.line} />
+  <Layer {...layerStyles.point} />
+</Source>
       </Map>
       {hoveredFeature && tooltipPosition && (
         <div
@@ -325,6 +342,7 @@ export default function App() {
           )}
         </div>
       )}
+      <Button disabled={!Object.values(features).length} onClick={saveHandler} loading={saving}>Save</Button>
       <ControlPanel polygons={Object.values(features)} markers={markerPositions} />
     </div>
   );
