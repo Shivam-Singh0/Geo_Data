@@ -2,9 +2,9 @@
 import dbConnect from "@/lib/mongodb";
 import SavedFeatures from "@/models/SavedFeatures";
 
+
 export async function saveFeatures(features, userId) {
-    await dbConnect();
-  console.log(userId)
+    await dbConnect().catch((err) => console.log(err));
   try {
     let savedFeature = await SavedFeatures.findOne({userId});
     if (savedFeature) {
@@ -21,6 +21,8 @@ export async function saveFeatures(features, userId) {
 }
 
 export  async function fetchData(userId) {
+
+      await dbConnect().catch((err) => console.log(err));
         try {
           const response = await SavedFeatures.findOne({userId})
           if (response?.savedFeatures) {

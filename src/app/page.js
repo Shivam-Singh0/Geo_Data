@@ -9,7 +9,7 @@ import * as turf from "@turf/turf";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useAuth, RedirectToSignIn } from "@clerk/nextjs";
-import { Button, Tooltip } from "@material-tailwind/react";
+import { Button, Spinner, Tooltip } from "@material-tailwind/react";
 import { fetchData, saveFeatures } from "./actions/actions";
 
 
@@ -26,6 +26,17 @@ export default function App() {
   const [hoveredFeature, setHoveredFeature] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState(null);
   const [saving, setSaving] = useState(false);
+  
+  let [isPending, startTransition] = React.useTransition();
+
+  //Fetch savedfeatures from database
+  React.useEffect(() => {
+    if (userId) {
+      startTransition(() => {
+        fetchData(userId).then((data) => setFetchedFetures(data) )
+      })
+       }
+  }, [userId]);
 
 
   React.useEffect(() => {
@@ -39,8 +50,15 @@ export default function App() {
     }
   }, [fetchedFeatures])
 
-
-  const geojson = {
+  let geojson = {
+    "type": "FeatureCollection",
+    "features": [
+    
+      
+  ],
+  }
+ if (fetchedFeatures.length) {
+   geojson = {
     "type": "FeatureCollection",
     "features": [
     
@@ -48,6 +66,7 @@ export default function App() {
   ],
     
   }
+ }
 
   const layerStyles = {
     polygon: {
@@ -80,10 +99,6 @@ export default function App() {
 
   const mapRef = useRef(null);
 
-  React.useEffect(() => {
-    if (userId) {
-      fetchData(userId).then((data) => setFetchedFetures(data) ) }
-  }, [userId]);
 
   const onUpdate = useCallback((e) => {
     setFeatures((currFeatures) => {
@@ -204,7 +219,17 @@ export default function App() {
     setSaving(true)
     await saveFeatures(Object.values(features), userId)
     setSaving(false)
-    fetchData(userId).then((data) => setFetchedFetures(data) )
+    startTransition(() => {
+      fetchData(userId).then((data) => setFetchedFetures(data) )
+    })
+  }
+
+  if (isPending ) {
+    return (
+      <div className="w-full mt-7">
+        <Spinner className="mx-auto my-auto h-20 w-20" />
+      </div>    
+      )
   }
 
   return (
